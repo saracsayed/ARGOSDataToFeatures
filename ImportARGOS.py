@@ -16,11 +16,10 @@ import sys, os, arcpy
 #Allow arcpy to override outputs
 arcpy.env.overwriteOutput = True
 
-# Set input variables (Hard-wired)
-inputFolder = "V:\\ARGOSTracking\\Data\\ARGOSData"
-
-outputFC = "V:/ARGOSTracking/Scratch/ARGOStrack.shp"
-outputSR = arcpy.SpatialReference(54002)
+# Set input variables
+inputFolder = arcpy.GetParameterAsText(0)
+outputFC = arcpy.GetParameterAsText(1)
+outputSR = arcpy.GetParameterAsText(2)
 
 #Create an empty feature class to which we'll add features
 outPath, outName = os.path.split(outputFC)
@@ -38,13 +37,18 @@ cur = arcpy.da.InsertCursor(outputFC,['Shape@','TagID','LC','Date'])
 # Iterate through each ARGOS file in the user supplied folder
 inputFiles = os.listdir(inputFolder)
 for inputFile in inputFiles:
+        
+    #Initialize error counter
+    error_counter = 0
+    total_counter = 0
+    
     #Don't process README.txt file
     if inputFile == 'README.txt':
         continue
     
     #Add full path to inputFile name
     inputFile_full = os.path.join(inputFolder, inputFile)
-    print(f"Processing {inputFile}")
+    arcpy.AddMessage(f"Processing {inputFile}")
     
     # Open the ARGOS data file for reading
     inputFileObj = open(inputFile_full,'r')
@@ -96,7 +100,7 @@ for inputFile in inputFiles:
                 obsPoint.Y = obsLat
                 
             except Exception as e:
-                pass
+                error_counter += 1
                 #print(f"Error adding record {tagID} to the output")
             
             #Convert point to a geometric point with spatial references
@@ -107,11 +111,17 @@ for inputFile in inputFiles:
             # Add feature using our insert cursor
             feature = cur.insertRow((obsGeomPoint,tagID,obsLC,obsDate.replace(".","/") + " " + obsTime))
             
+            #Increment the total counter
+            total_counter += 1
         # Move to the next line so the while loop progresses
         lineString = inputFileObj.readline()
         
+    
     #Close the file object
     inputFileObj.close()
-
+    #Report how many errors in the file
+    error_rate = error_counter/total_counter  *100
+    arcpy.AddWarning(f'{error_counter} records were skipped: {error_rate: .2f}%')
+    
 #Delete the cursor
 del cur
